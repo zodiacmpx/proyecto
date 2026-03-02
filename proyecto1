@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simulador Acústico Direccional y Cancelación</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #121935;
+      --panel-2: #0f1530;
+      --line: rgba(255,255,255,.10);
+      --text: #eef3ff;
+      --muted: #aab6d3;
+      --accent: #7aa2ff;
+      --good: #58d68d;
+      --warn: #ffcc66;
+      --bad: #ff6b6b;
+      --shadow: 0 18px 45px rgba(0,0,0,.28);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: radial-gradient(circle at top left, #17224b 0%, #0a0f20 55%, #070b16 100%);
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      height: 100vh;
+      gap: 14px;
+      padding: 14px;
+    }
+
+    .sidebar, .main {
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      overflow: hidden;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      min-width: 320px;
+    }
+
+    .main {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    .header {
+      padding: 18px 20px 12px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
+    }
+
+    .title {
+      margin: 0;
+      font-size: 1.25rem;
+      font-weight: 800;
+      letter-spacing: .2px;
+    }
+
+    .subtitle {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: .92rem;
+      line-height: 1.4;
+    }
+
+    .scroll {
+      overflow: auto;
+      padding: 14px;
+    }
+
+    .section {
+      background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.02));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+
+    .section h3 {
+      margin: 0 0 10px;
+      font-size: .98rem;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .control {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .control label {
+      font-size: .83rem;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    input[type="range"], select, button {
+      width: 100%;
+    }
+
+    input[type="range"] {
+      appearance: none;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.10);
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid white;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(122,162,255,.55);
+    }
+
+    select, button {
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: .92rem;
+    }
+
+    button {
+      cursor: pointer;
+      transition: .18s ease;
+      font-weight: 700;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      background: rgba(255,255,255,.09);
+    }
+
+    .buttons {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,.02);
+    }
+
+    .stat {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.02));
+    }
+
+    .stat .k {
+      color: var(--muted);
+      font-size: .78rem;
+      margin-bottom: 4px;
+    }
+
+    .stat .v {
+      font-size: 1.35rem;
+      font-weight: 800;
+    }
+
+    .canvas-wrap {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(6,10,24,.55), rgba(6,10,24,.85));
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .footer {
+      padding: 12px 16px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .82rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      background: rgba(255,255,255,.02);
+    }
+
+    .legend {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      font-size: .82rem;
+      color: var(--muted);
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 5px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .78rem;
+    }
+
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+    @media (max-width: 1100px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { max-height: 42vh; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="header">
+        <h1 class="title">Simulador de sonido direccional y anti-ruido</h1>
+        <p class="subtitle">
+          Prototipo conceptual para explorar cómo podrían comportarse arreglos de parlantes, zonas de cobertura, fuga acústica y cancelación activa en espacios ficticios.
+        </p>
+      </div>
+      <div class="scroll">
+        <div class="section">
+          <h3>Escenario ficticio</h3>
+          <div class="control">
+            <label>Preset de espacio <span id="scenarioName">Bar de rock compacto</span></label>
+            <select id="scenarioSelect">
+              <option value="bar">Bar de rock compacto</option>
+              <option value="hall">Sala rectangular reverberante</option>
+              <option value="patio">Patio semiabierto</option>
+              <option value="club">Club alargado con público</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3>Fuente principal</h3>
+          <div class="grid-2">
+            <div class="control">
+              <label>Frecuencia <span id="frequencyVal">220 Hz</span></label>
+              <input id="frequency" type="range" min="60" max="1200" step="10" value="220" />
+            </div>
+            <div class="control">
+              <label>Ganancia <span id="gainVal">86 dB</span></label>
+              <input id="gain" type="range" min="55" max="120" step="1" value="86" />
+            </div>
+            <div class="control">
+              <label>N° parlantes <span id="speakersVal">6</span></label>
+              <input id="speakerCount" type="range" min="1" max="16" step="1" value="6" />
+            </div>
+            <div class="control">
+              <label>Separación array <span id="spacingVal">0.55 m</span></label>
+              <input id="spacing" type="range" min="0.15" max="1.50" step="0.01" value="0.55" />
+            </div>
+            <div class="control">
+              <label>Ángulo haz <span id="beamVal">32°</span></label>
+              <input id="beamWidth" type="range" min="10" max="150" step="1" value="32" />
+            </div>
+            <div class="control">
+              <label>Dirección del haz <span id="directionVal">0°</span></label>
+              <input id="direction" type="range" min="-90" max="90" step="1" value="0" />
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3>Cancelación activa / aislamiento virtual</h3>
+          <div class="grid-2">
+            <div class="control">
+              <label>Anti-ruido <span id="cancellationState">Encendido</span></label>
+              <select id="cancellationEnabled">
+                <option value="1">Encendido</option>
+                <option value="0">Apagado</option>
+              </select>
+            </div>
+            <div class="control">
+              <label>Intensidad cancelación <span id="cancelStrengthVal">74%</span></label>
+              <input id="cancelStrength" type="range" min="0" max="100" step="1" value="74" />
+            </div>
+            <div class="control">
+              <label>Radio zona protegida <span id="zoneRadiusVal">3.8 m</span></label>
+              <input id="zoneRadius" type="range" min="1" max="9" step="0.1" value="3.8" />
+            </div>
+            <div class="control">
+              <label>Precisión de fase <span id="phaseLockVal">81%</span></label>
+              <input id="phaseLock" type="range" min="20" max="100" step="1" value="81" />
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3>Entorno y propagación</h3>
+          <div class="grid-2">
+            <div class="control">
+              <label>Absorción del recinto <span id="absorptionVal">31%</span></label>
+              <input id="absorption" type="range" min="0" max="100" step="1" value="31" />
+            </div>
+            <div class="control">
+              <label>Reflexión paredes <span id="reflectionVal">26%</span></label>
+              <input id="reflection" type="range" min="0" max="100" step="1" value="26" />
+            </div>
+            <div class="control">
+              <label>Personas / obstáculo blando <span id="crowdVal">35%</span></label>
+              <input id="crowd" type="range" min="0" max="100" step="1" value="35" />
+            </div>
+            <div class="control">
+              <label>Velocidad simulación <span id="speedVal">1.0x</span></label>
+              <input id="simSpeed" type="range" min="0.2" max="3" step="0.1" value="1" />
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3>Acciones</h3>
+          <div class="buttons">
+            <button id="playPauseBtn">Pausar</button>
+            <button id="resetBtn">Reset</button>
+            <button id="toggleGridBtn">Ocultar grilla</button>
+          </div>
+          <div style="height:10px"></div>
+          <div class="buttons">
+            <button id="toggleVectorsBtn">Ocultar vectores</button>
+            <button id="toggleHeatBtn">Ocultar mapa</button>
+            <button id="randomizeBtn">Randomizar</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3>Interpretación</h3>
+          <div class="chip">Rojo = mayor presión sonora</div>
+          <div class="chip">Azul/negro = menor energía</div>
+          <div class="chip">Círculo verde = zona protegida</div>
+          <div class="chip">Línea azul = haz principal</div>
+          <div class="chip">Puntos magenta = array anti-ruido</div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="stats">
+        <div class="stat"><div class="k">Promedio zona público</div><div class="v" id="avgAudience">0 dB</div></div>
+        <div class="stat"><div class="k">Promedio zona protegida</div><div class="v" id="avgProtected">0 dB</div></div>
+        <div class="stat"><div class="k">Reducción estimada</div><div class="v" id="reduction">0 dB</div></div>
+        <div class="stat"><div class="k">Fuga al exterior</div><div class="v" id="leakage">0 dB</div></div>
+      </div>
+
+      <div class="canvas-wrap">
+        <canvas id="scene"></canvas>
+      </div>
+
+      <div class="footer">
+        <div class="legend">
+          <span><span class="dot" style="background:#5dade2"></span>Array principal</span>
+          <span><span class="dot" style="background:#d252ff"></span>Array anti-ruido</span>
+          <span><span class="dot" style="background:#58d68d"></span>Zona protegida</span>
+          <span><span class="dot" style="background:#ff6b6b"></span>Exterior crítico</span>
+        </div>
+        <div class="mono" id="statusText">Modelo conceptual · no reemplaza una simulación acústica profesional ni mediciones reales dB(A).</div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('scene');
+    const ctx = canvas.getContext('2d');
+
+    const controls = {
+      scenarioSelect: document.getElementById('scenarioSelect'),
+      cancellationEnabled: document.getElementById('cancellationEnabled'),
+      frequency: document.getElementById('frequency'),
+      gain: document.getElementById('gain'),
+      speakerCount: document.getElementById('speakerCount'),
+      spacing: document.getElementById('spacing'),
+      beamWidth: document.getElementById('beamWidth'),
+      direction: document.getElementById('direction'),
+      cancelStrength: document.getElementById('cancelStrength'),
+      zoneRadius: document.getElementById('zoneRadius'),
+      phaseLock: document.getElementById('phaseLock'),
+      absorption: document.getElementById('absorption'),
+      reflection: document.getElementById('reflection'),
+      crowd: document.getElementById('crowd'),
+      simSpeed: document.getElementById('simSpeed')
+    };
+
+    const labels = {
+      scenarioName: document.getElementById('scenarioName'),
+      frequencyVal: document.getElementById('frequencyVal'),
+      gainVal: document.getElementById('gainVal'),
+      speakersVal: document.getElementById('speakersVal'),
+      spacingVal: document.getElementById('spacingVal'),
+      beamVal: document.getElementById('beamVal'),
+      directionVal: document.getElementById('directionVal'),
+      cancellationState: document.getElementById('cancellationState'),
+      cancelStrengthVal: document.getElementById('cancelStrengthVal'),
+      zoneRadiusVal: document.getElementById('zoneRadiusVal'),
+      phaseLockVal: document.getElementById('phaseLockVal'),
+      absorptionVal: document.getElementById('absorptionVal'),
+      reflectionVal: document.getElementById('reflectionVal'),
+      crowdVal: document.getElementById('crowdVal'),
+      speedVal: document.getElementById('speedVal')
+    };
+
+    const readouts = {
+      avgAudience: document.getElementById('avgAudience'),
+      avgProtected: document.getElementById('avgProtected'),
+      reduction: document.getElementById('reduction'),
+      leakage: document.getElementById('leakage'),
+      statusText: document.getElementById('statusText')
+    };
+
+    const presets = {
+      bar: {
+        name: 'Bar de rock compacto',
+        room: { x: 80, y: 70, w: 840, h: 480 },
+        protectedZone: { x: 740, y: 190 },
+        sourceAnchor: { x: 150, y: 305 },
+        exteriorZone: { x: 945, y: 305, r: 85 },
+        audience: { x: 400, y: 305, rx: 180, ry: 110 },
+        obstacles: [
+          { x: 305, y: 105, w: 52, h: 140, a: 0.18 },
+          { x: 630, y: 395, w: 85, h: 55, a: 0.12 }
+        ]
+      },
+      hall: {
+        name: 'Sala rectangular reverberante',
+        room: { x: 60, y: 50, w: 900, h: 520 },
+        protectedZone: { x: 810, y: 165 },
+        sourceAnchor: { x: 150, y: 310 },
+        exteriorZone: { x: 980, y: 310, r: 95 },
+        audience: { x: 475, y: 310, rx: 240, ry: 145 },
+        obstacles: [
+          { x: 440, y: 90, w: 26, h: 190, a: 0.16 },
+          { x: 440, y: 340, w: 26, h: 180, a: 0.16 }
+        ]
+      },
+      patio: {
+        name: 'Patio semiabierto',
+        room: { x: 70, y: 90, w: 860, h: 430 },
+        protectedZone: { x: 780, y: 210 },
+        sourceAnchor: { x: 165, y: 305 },
+        exteriorZone: { x: 952, y: 305, r: 115 },
+        audience: { x: 430, y: 305, rx: 210, ry: 120 },
+        obstacles: [
+          { x: 605, y: 95, w: 24, h: 135, a: 0.2 },
+          { x: 605, y: 360, w: 24, h: 125, a: 0.2 }
+        ]
+      },
+      club: {
+        name: 'Club alargado con público',
+        room: { x: 55, y: 85, w: 920, h: 430 },
+        protectedZone: { x: 850, y: 180 },
+        sourceAnchor: { x: 120, y: 300 },
+        exteriorZone: { x: 995, y: 300, r: 80 },
+        audience: { x: 510, y: 300, rx: 255, ry: 105 },
+        obstacles: [
+          { x: 715, y: 125, w: 60, h: 55, a: 0.14 },
+          { x: 715, y: 420, w: 60, h: 40, a: 0.14 },
+          { x: 345, y: 120, w: 28, h: 110, a: 0.15 }
+        ]
+      }
+    };
+
+    const state = {
+      playing: true,
+      showGrid: true,
+      showVectors: true,
+      showHeat: true,
+      time: 0,
+      scenario: presets.bar,
+      gridStep: 16,
+      stats: {
+        avgAudience: 0,
+        avgProtected: 0,
+        reduction: 0,
+        leakage: 0
+      }
+    };
+
+    function resizeCanvas() {
+      const ratio = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = Math.floor(rect.width * ratio);
+      canvas.height = Math.floor(rect.height * ratio);
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    }
+
+    function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+    function lerp(a, b, t) { return a + (b - a) * t; }
+    function dist(ax, ay, bx, by) { return Math.hypot(ax - bx, ay - by); }
+    function degToRad(d) { return d * Math.PI / 180; }
+
+    function value(id) {
+      return parseFloat(controls[id].value);
+    }
+
+    function syncLabels() {
+      const s = state.scenario;
+      labels.scenarioName.textContent = s.name;
+      labels.frequencyVal.textContent = `${value('frequency')} Hz`;
+      labels.gainVal.textContent = `${value('gain')} dB`;
+      labels.speakersVal.textContent = `${value('speakerCount')}`;
+      labels.spacingVal.textContent = `${value('spacing').toFixed(2)} m`;
+      labels.beamVal.textContent = `${value('beamWidth')}°`;
+      labels.directionVal.textContent = `${value('direction')}°`;
+      labels.cancellationState.textContent = controls.cancellationEnabled.value === '1' ? 'Encendido' : 'Apagado';
+      labels.cancelStrengthVal.textContent = `${value('cancelStrength')}%`;
+      labels.zoneRadiusVal.textContent = `${value('zoneRadius').toFixed(1)} m`;
+      labels.phaseLockVal.textContent = `${value('phaseLock')}%`;
+      labels.absorptionVal.textContent = `${value('absorption')}%`;
+      labels.reflectionVal.textContent = `${value('reflection')}%`;
+      labels.crowdVal.textContent = `${value('crowd')}%`;
+      labels.speedVal.textContent = `${value('simSpeed').toFixed(1)}x`;
+    }
+
+    function getSpeakerArray() {
+      const s = state.scenario;
+      const count = Math.round(value('speakerCount'));
+      const spacingPx = value('spacing') * 48;
+      const dir = degToRad(value('direction'));
+      const normal = dir + Math.PI / 2;
+      const arr = [];
+      for (let i = 0; i < count; i++) {
+        const offset = (i - (count - 1) / 2) * spacingPx;
+        arr.push({
+          x: s.sourceAnchor.x + Math.cos(normal) * offset,
+          y: s.sourceAnchor.y + Math.sin(normal) * offset,
+          dir,
+          gain: value('gain')
+        });
+      }
+      return arr;
+    }
+
+    function getCancelArray() {
+      const s = state.scenario;
+      const count = Math.max(2, Math.round(value('speakerCount') * 0.66));
+      const spacingPx = value('spacing') * 40;
+      const dir = Math.PI + degToRad(value('direction'));
+      const normal = dir + Math.PI / 2;
+      const anchor = {
+        x: s.protectedZone.x - Math.cos(degToRad(value('direction'))) * 34,
+        y: s.protectedZone.y - Math.sin(degToRad(value('direction'))) * 34
+      };
+      const arr = [];
+      for (let i = 0; i < count; i++) {
+        const offset = (i - (count - 1) / 2) * spacingPx;
+        arr.push({
+          x: anchor.x + Math.cos(normal) * offset,
+          y: anchor.y + Math.sin(normal) * offset,
+          dir,
+          gain: value('gain') * (value('cancelStrength') / 100) * 0.82
+        });
+      }
+      return arr;
+    }
+
+    function beamFactor(src, x, y) {
+      const ang = Math.atan2(y - src.y, x - src.x);
+      let d = Math.abs(Math.atan2(Math.sin(ang - src.dir), Math.cos(ang - src.dir)));
+      const width = degToRad(value('beamWidth'));
+      const softness = 0.65;
+      return Math.exp(-Math.pow(d / Math.max(0.08, width * softness), 2));
+    }
+
+    function obstacleAttenuation(x, y) {
+      const obs = state.scenario.obstacles;
+      let atten = 1;
+      for (const o of obs) {
+        if (x > o.x && x < o.x + o.w && y > o.y && y < o.y + o.h) {
+          atten *= 1 - o.a;
+        }
+      }
+      return atten;
+    }
+
+    function roomMask(x, y) {
+      const r = state.scenario.room;
+      return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+    }
+
+    function audienceMask(x, y) {
+      const a = state.scenario.audience;
+      return Math.pow((x - a.x) / a.rx, 2) + Math.pow((y - a.y) / a.ry, 2) <= 1;
+    }
+
+    function protectedMask(x, y) {
+      const p = state.scenario.protectedZone;
+      const r = value('zoneRadius') * 22;
+      return dist(x, y, p.x, p.y) <= r;
+    }
+
+    function exteriorMask(x, y) {
+      const e = state.scenario.exteriorZone;
+      return dist(x, y, e.x, e.y) <= e.r;
+    }
+
+    function computeFieldAt(x, y, t) {
+      const absorption = value('absorption') / 100;
+      const reflection = value('reflection') / 100;
+      const crowd = value('crowd') / 100;
+      const freq = value('frequency');
+      const speakers = getSpeakerArray();
+      const anti = getCancelArray();
+      const cancelOn = controls.cancellationEnabled.value === '1';
+      const phaseLock = value('phaseLock') / 100;
+
+      let total = 0;
+      let reflected = 0;
+
+      for (const src of speakers) {
+        const d = Math.max(8, dist(src.x, src.y, x, y));
+        const base = src.gain * beamFactor(src, x, y) / (1 + d * 0.05);
+        const k = 2 * Math.PI * freq / 340;
+        total += Math.sin(k * d - t * 4) * base;
+
+        const room = state.scenario.room;
+        const mirrorX = room.x + room.w - (src.x - room.x);
+        const md = Math.max(8, dist(mirrorX, src.y, x, y));
+        reflected += Math.sin(k * md - t * 4 + 0.8) * base * reflection * 0.45;
+      }
+
+      if (cancelOn) {
+        for (const src of anti) {
+          const d = Math.max(8, dist(src.x, src.y, x, y));
+          const base = src.gain * beamFactor(src, x, y) / (1 + d * 0.055);
+          const k = 2 * Math.PI * freq / 340;
+          const phaseError = (1 - phaseLock) * 1.6;
+          total -= Math.sin(k * d - t * 4 + Math.PI + phaseError) * base;
+        }
+      }
+
+      const inAudience = audienceMask(x, y) ? 1 : 0;
+      const envAtten = (1 - absorption * 0.45) * (1 - crowd * 0.25 * inAudience) * obstacleAttenuation(x, y);
+      const pressure = Math.abs(total + reflected) * envAtten;
+      const approxDb = clamp(20 * Math.log10(1 + pressure) + 32, 20, 122);
+      return approxDb;
+    }
+
+    function dbToColor(db) {
+      const t = clamp((db - 20) / 100, 0, 1);
+      const r = Math.floor(lerp(8, 255, Math.pow(t, 1.1)));
+      const g = Math.floor(lerp(18, 170, Math.max(0, 1 - Math.abs(t - 0.55) * 1.4)));
+      const b = Math.floor(lerp(36, 20, t));
+      const a = 0.80;
+      return `rgba(${r},${g},${b},${a})`;
+    }
+
+    function computeStats(t) {
+      const room = state.scenario.room;
+      const step = 26;
+      let audSum = 0, audCount = 0;
+      let proSum = 0, proCount = 0;
+      let extSum = 0, extCount = 0;
+
+      for (let y = room.y; y <= room.y + room.h; y += step) {
+        for (let x = room.x; x <= room.x + room.w; x += step) {
+          const db = computeFieldAt(x, y, t);
+          if (audienceMask(x, y)) {
+            audSum += db; audCount++;
+          }
+          if (protectedMask(x, y)) {
+            proSum += db; proCount++;
+          }
+        }
+      }
+
+      const ex = state.scenario.exteriorZone;
+      for (let a = 0; a < Math.PI * 2; a += 0.25) {
+        for (let r = ex.r * 0.3; r <= ex.r; r += 14) {
+          const x = ex.x + Math.cos(a) * r;
+          const y = ex.y + Math.sin(a) * r;
+          const db = computeFieldAt(x, y, t) * 0.88;
+          extSum += db; extCount++;
+        }
+      }
+
+      const avgAudience = audCount ? audSum / audCount : 0;
+      const avgProtected = proCount ? proSum / proCount : 0;
+      const leakage = extCount ? extSum / extCount : 0;
+      const reduction = avgAudience - avgProtected;
+
+      state.stats = { avgAudience, avgProtected, reduction, leakage };
+      readouts.avgAudience.textContent = `${avgAudience.toFixed(1)} dB`;
+      readouts.avgProtected.textContent = `${avgProtected.toFixed(1)} dB`;
+      readouts.reduction.textContent = `${reduction.toFixed(1)} dB`;
+      readouts.leakage.textContent = `${leakage.toFixed(1)} dB`;
+
+      const feasible = reduction > 6 && leakage < 62;
+      readouts.statusText.textContent = feasible
+        ? 'Resultado conceptual favorable: el haz se concentra mejor y la zona protegida cae a un rango más bajo.'
+        : 'Resultado conceptual exigente: todavía hay fuga o baja separación entre zona útil y zona protegida.';
+    }
+
+    function drawBackground() {
+      const { width, height } = canvas.getBoundingClientRect();
+      ctx.clearRect(0, 0, width, height);
+      const g = ctx.createLinearGradient(0, 0, 0, height);
+      g.addColorStop(0, 'rgba(8,12,26,1)');
+      g.addColorStop(1, 'rgba(5,8,18,1)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    function drawRoom() {
+      const r = state.scenario.room;
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,255,255,.03)';
+      ctx.strokeStyle = 'rgba(255,255,255,.18)';
+      ctx.lineWidth = 2;
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.strokeRect(r.x, r.y, r.w, r.h);
+      ctx.restore();
+
+      if (state.showGrid) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,.05)';
+        ctx.lineWidth = 1;
+        for (let x = r.x; x <= r.x + r.w; x += 40) {
+          ctx.beginPath();
+          ctx.moveTo(x, r.y);
+          ctx.lineTo(x, r.y + r.h);
+          ctx.stroke();
+        }
+        for (let y = r.y; y <= r.y + r.h; y += 40) {
+          ctx.beginPath();
+          ctx.moveTo(r.x, y);
+          ctx.lineTo(r.x + r.w, y);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+
+    function drawHeatmap() {
+      if (!state.showHeat) return;
+      const r = state.scenario.room;
+      const step = state.gridStep;
+      for (let y = r.y; y <= r.y + r.h; y += step) {
+        for (let x = r.x; x <= r.x + r.w; x += step) {
+          const db = computeFieldAt(x + step * 0.5, y + step * 0.5, state.time);
+          ctx.fillStyle = dbToColor(db);
+          ctx.fillRect(x, y, step + 1, step + 1);
+        }
+      }
+    }
+
+    function drawAudience() {
+      const a = state.scenario.audience;
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(a.x, a.y, a.rx, a.ry, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(122,162,255,.08)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(122,162,255,.24)';
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,.7)';
+      ctx.font = '12px Inter, sans-serif';
+      ctx.fillText('Zona de público', a.x - 40, a.y - a.ry - 10);
+      ctx.restore();
+    }
+
+    function drawProtectedZone() {
+      const p = state.scenario.protectedZone;
+      const rr = value('zoneRadius') * 22;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, rr, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(88,214,141,.11)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(88,214,141,.9)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,.88)';
+      ctx.font = '12px Inter, sans-serif';
+      ctx.fillText('Zona protegida', p.x - 38, p.y - rr - 12);
+      ctx.restore();
+    }
+
+    function drawExteriorZone() {
+      const e = state.scenario.exteriorZone;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,107,107,.08)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,107,107,.4)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 6]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(255,255,255,.75)';
+      ctx.font = '12px Inter, sans-serif';
+      ctx.fillText('Exterior sensible', e.x - 35, e.y - e.r - 10);
+      ctx.restore();
+    }
+
+    function drawObstacles() {
+      ctx.save();
+      for (const o of state.scenario.obstacles) {
+        ctx.fillStyle = 'rgba(255,255,255,.12)';
+        ctx.strokeStyle = 'rgba(255,255,255,.18)';
+        ctx.fillRect(o.x, o.y, o.w, o.h);
+        ctx.strokeRect(o.x, o.y, o.w, o.h);
+      }
+      ctx.restore();
+    }
+
+    function drawSpeakers() {
+      const speakers = getSpeakerArray();
+      const anti = getCancelArray();
+      const dir = degToRad(value('direction'));
+      const beamLen = 300;
+
+      if (state.showVectors) {
+        ctx.save();
+        for (const sp of speakers) {
+          ctx.beginPath();
+          ctx.moveTo(sp.x, sp.y);
+          ctx.lineTo(sp.x + Math.cos(dir) * beamLen, sp.y + Math.sin(dir) * beamLen);
+          ctx.strokeStyle = 'rgba(93,173,226,.65)';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+
+        if (controls.cancellationEnabled.value === '1') {
+          for (const sp of anti) {
+            ctx.beginPath();
+            ctx.moveTo(sp.x, sp.y);
+            ctx.lineTo(sp.x + Math.cos(sp.dir) * 120, sp.y + Math.sin(sp.dir) * 120);
+            ctx.strokeStyle = 'rgba(210,82,255,.65)';
+            ctx.lineWidth = 1.2;
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+      }
+
+      ctx.save();
+      for (const sp of speakers) {
+        ctx.beginPath();
+        ctx.arc(sp.x, sp.y, 8, 0, Math.PI * 2);
+        ctx.fillStyle = '#5dade2';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,.9)';
+        ctx.stroke();
+      }
+
+      if (controls.cancellationEnabled.value === '1') {
+        for (const sp of anti) {
+          ctx.beginPath();
+          ctx.arc(sp.x, sp.y, 6.5, 0, Math.PI * 2);
+          ctx.fillStyle = '#d252ff';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,.9)';
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+
+    function drawAnnotations() {
+      const r = state.scenario.room;
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,255,255,.80)';
+      ctx.font = '12px Inter, sans-serif';
+      ctx.fillText('Escenario', r.x + 10, r.y - 10);
+      ctx.fillText('Escenario exterior', state.scenario.exteriorZone.x - 48, state.scenario.exteriorZone.y + state.scenario.exteriorZone.r + 20);
+      ctx.restore();
+    }
+
+    function randomizeParameters() {
+      controls.frequency.value = (80 + Math.random() * 840).toFixed(0);
+      controls.gain.value = (70 + Math.random() * 30).toFixed(0);
+      controls.speakerCount.value = (3 + Math.random() * 10).toFixed(0);
+      controls.spacing.value = (0.2 + Math.random() * 0.9).toFixed(2);
+      controls.beamWidth.value = (14 + Math.random() * 70).toFixed(0);
+      controls.direction.value = (-25 + Math.random() * 50).toFixed(0);
+      controls.cancelStrength.value = (40 + Math.random() * 50).toFixed(0);
+      controls.zoneRadius.value = (2 + Math.random() * 5).toFixed(1);
+      controls.phaseLock.value = (40 + Math.random() * 55).toFixed(0);
+      controls.absorption.value = (10 + Math.random() * 55).toFixed(0);
+      controls.reflection.value = (5 + Math.random() * 55).toFixed(0);
+      controls.crowd.value = (5 + Math.random() * 80).toFixed(0);
+      syncLabels();
+    }
+
+    function resetParameters() {
+      controls.frequency.value = 220;
+      controls.gain.value = 86;
+      controls.speakerCount.value = 6;
+      controls.spacing.value = 0.55;
+      controls.beamWidth.value = 32;
+      controls.direction.value = 0;
+      controls.cancellationEnabled.value = '1';
+      controls.cancelStrength.value = 74;
+      controls.zoneRadius.value = 3.8;
+      controls.phaseLock.value = 81;
+      controls.absorption.value = 31;
+      controls.reflection.value = 26;
+      controls.crowd.value = 35;
+      controls.simSpeed.value = 1;
+      syncLabels();
+    }
+
+    function render() {
+      drawBackground();
+      drawRoom();
+      drawHeatmap();
+      drawAudience();
+      drawProtectedZone();
+      drawExteriorZone();
+      drawObstacles();
+      drawSpeakers();
+      drawAnnotations();
+      computeStats(state.time);
+    }
+
+    function tick() {
+      if (state.playing) {
+        state.time += 0.018 * value('simSpeed');
+      }
+      render();
+      requestAnimationFrame(tick);
+    }
+
+    function bindControls() {
+      Object.values(controls).forEach(el => el.addEventListener('input', syncLabels));
+      controls.scenarioSelect.addEventListener('change', () => {
+        state.scenario = presets[controls.scenarioSelect.value];
+        syncLabels();
+      });
+
+      document.getElementById('playPauseBtn').addEventListener('click', () => {
+        state.playing = !state.playing;
+        document.getElementById('playPauseBtn').textContent = state.playing ? 'Pausar' : 'Reanudar';
+      });
+
+      document.getElementById('resetBtn').addEventListener('click', () => {
+        resetParameters();
+      });
+
+      document.getElementById('toggleGridBtn').addEventListener('click', (e) => {
+        state.showGrid = !state.showGrid;
+        e.target.textContent = state.showGrid ? 'Ocultar grilla' : 'Mostrar grilla';
+      });
+
+      document.getElementById('toggleVectorsBtn').addEventListener('click', (e) => {
+        state.showVectors = !state.showVectors;
+        e.target.textContent = state.showVectors ? 'Ocultar vectores' : 'Mostrar vectores';
+      });
+
+      document.getElementById('toggleHeatBtn').addEventListener('click', (e) => {
+        state.showHeat = !state.showHeat;
+        e.target.textContent = state.showHeat ? 'Ocultar mapa' : 'Mostrar mapa';
+      });
+
+      document.getElementById('randomizeBtn').addEventListener('click', randomizeParameters);
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+
+    resizeCanvas();
+    bindControls();
+    resetParameters();
+    tick();
+  </script>
+</body>
+</html>
